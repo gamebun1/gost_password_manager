@@ -101,7 +101,8 @@ class gost_vault:
         iv = enc_bytes[:self.kuzn_size]
         mac = enc_bytes[self.kuzn_size:(self.kuzn_size+self.mac_size)]
         enc_data = enc_bytes[(self.kuzn_size+self.mac_size):]
-
+        self.key_mac = self._get_key_mac()
+        self.key_enc = self._get_key_enc()
         #data check
         data = iv + enc_data
         if self.mac_size == 32:
@@ -116,6 +117,7 @@ class gost_vault:
         
         kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_CBC, iv=iv)
         data_clean(self.key_enc)
+        data_clean(self.key_mac)
         try:
             return json.loads(self._unpad(kuznechik.decrypt(enc_data)).decode('utf-8'))
         except:
