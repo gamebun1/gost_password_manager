@@ -1,2 +1,4 @@
 venv
 passwords
+generator
+__pycache__
