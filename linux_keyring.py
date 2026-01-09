@@ -45,16 +45,19 @@ class KeyringManager:
         return key_id
 
     @staticmethod
-    def read(key_id: int) -> bytes:
+    def read(key_id: int) -> bytearray:
         size = _lib.keyctl_read(key_id, None, 0)
         if size == -1:
-            return b""
+            return bytearray()
         
         buffer = ctypes.create_string_buffer(size)
         ret = _lib.keyctl_read(key_id, buffer, size)
         if ret == -1:
-            return b""
-        return buffer.raw[:ret]
+            return bytearray()
+        try:
+            return bytearray(buffer.raw[:ret])
+        finally:
+            ctypes.memset(buffer, 0, size)
 
     @staticmethod
     def revoke(key_id: int): 
