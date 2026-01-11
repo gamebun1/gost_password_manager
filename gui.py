@@ -310,7 +310,7 @@ class passwword_manager_app:
             #загрузка и шифрование паролей
             ram_data = {}
             for site, creds in self.vault.decrypt_data(content).items():
-                pwd_enc = self.vault.encrypt_bytes(f"{site}|{creds['password']}".encode('utf-8'))
+                pwd_enc = self.vault.encrypt_bytes(f"{site}|{creds['password']}".encode('utf-8'), init_data=site)
                 ram_data[site] = {
                     "email": creds['email'],
                     "password": pwd_enc
@@ -328,7 +328,7 @@ class passwword_manager_app:
             for site, creds in self.curr_data.items():
                 data[site] = {
                     "email": creds['email'],
-                    "password": self.vault.decrypt_bytes(creds['password']).split("|", 1)[1]
+                    "password": self.vault.decrypt_bytes(creds['password'], init_data=site).split("|", 1)[1]
                 }
             
             enc_bytes = self.vault.encrypt_data(data)
@@ -366,7 +366,7 @@ class passwword_manager_app:
             messagebox.showwarning("---", "впишите сайт и пароль.")
             return
         
-        pwd_enc = self.vault.encrypt_bytes(web.encode("utf-8") + b"|" + pwd)
+        pwd_enc = self.vault.encrypt_bytes(web.encode("utf-8") + b"|" + pwd, init_data=web)
         data_clean(pwd)
         self.pwd_entry.clear()
 
@@ -387,7 +387,7 @@ class passwword_manager_app:
             pwd_enc = self.curr_data[web]["password"]
             
             try:
-                pwd = self.vault.decrypt_bytes(pwd_enc).split("|", 1)[1]
+                pwd = self.vault.decrypt_bytes(pwd_enc, init_data=web).split("|", 1)[1]
                 pyperclip.copy(pwd)
                 messagebox.showinfo(web, f"email: {email}\nпароль: {pwd}\n\nпароль скопирован в буфер обмена")
             finally:

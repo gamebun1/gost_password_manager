@@ -3,7 +3,7 @@ import os
 import hmac
 from linux_keyring import KeyringManager, KEY_SPEC_PROCESS_KEYRING
 
-from gostcrypto import gostcipher, gosthmac, gostpbkdf
+from gostcrypto import gostcipher, gosthmac, gostpbkdf, gosthash
 
 from utils import data_clean
 
@@ -37,7 +37,7 @@ class gost_vault:
         return KeyringManager.read(self.key_enc_id)
     def _get_key_mac(self):
         return KeyringManager.read(self.key_mac_id)
-
+    #PKCS7
     def _pad(self, data):
         pad_len = self.kuzn_size - (len(data) % self.kuzn_size)
         return data + bytes([pad_len] * pad_len)
@@ -73,6 +73,17 @@ class gost_vault:
             data_clean(self.key_mac)
 
         return iv + mac + enc_data
+    
+    #генерация iv для шифрования паролей
+    def _generate_iv_simple(self, init_data):
+        if isinstance(init_data, str):
+            data = init_data.encode('utf-8')
+        else:
+            data = init_data
+        
+        hasher = gosthash.new('stribog256', data=data)
+        digest = hasher.digest()
+        return digest[:self.kuzn_size]
 
     def decrypt_data(self, enc_bytes):
         data_len = self.kuzn_size + 16 + self.mac_size # data 1 block(16 bytes) + iv(16 bytes) + mac(32 bytes) 
@@ -104,21 +115,32 @@ class gost_vault:
         except:
             return None
     #шифрование отдельных данных
-    def encrypt_bytes(self, data):
-        
+    def encrypt_bytes(self, data, init_data=None):
         self.key_enc = self._get_key_enc()
         try:
-            kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_ECB)
-            return kuznechik.encrypt(self._pad(data))
+            if init_data is None:
+                kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_ECB)
+                return kuznechik.encrypt(self._pad(data))
+            else:
+                iv_d = self._generate_iv_simple(init_data=init_data)
+                
+                kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_CBC, iv=iv_d)
+                return kuznechik.encrypt(self._pad(data))
         finally:
             data_clean(self.key_enc)
 
     #расшифровываем отдельные данные
-    def decrypt_bytes(self, enc_bytes):
+    def decrypt_bytes(self, enc_bytes, init_data=None):
         self.key_enc = self._get_key_enc()
         try:
-            kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_ECB)
-            return self._unpad(kuznechik.decrypt(enc_bytes)).decode("utf-8")
+            if init_data is None:
+                kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_ECB)
+                return self._unpad(kuznechik.decrypt(enc_bytes)).decode("utf-8")
+            else:
+                iv_d = self._generate_iv_simple(init_data=init_data)
+                
+                kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_CBC, iv=iv_d)
+                return self._unpad(kuznechik.decrypt(enc_bytes)).decode("utf-8")
         finally:
             data_clean(self.key_enc)
         
