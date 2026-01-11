@@ -15,116 +15,196 @@ GEN_FILE = "generator"
 
 #secure tk entry
 class SecureEntry(tk.Entry):
-    def __init__(self, parent, mask_input=True, *args, **kwargs):
+    def __init__(self, parent, mask_input=True, max_len=64, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
-        self.pwd_buffer = bytearray()
+        
+        self.MAX_LEN = max_len
         self.mask_input = mask_input
         
+        self._buffer = bytearray(self.MAX_LEN)
+        self._data_len = 0 
+        
+        self._char_sizes = [] 
+
         self.bind('<Key>', self.on_key_press)
         
-        # блокируем стандартные механизмы копирования
         self.bind('<Control-c>', lambda e: "break")
         self.bind('<Control-x>', lambda e: "break")
         self.bind('<<Copy>>', lambda e: "break")
         self.bind('<<Cut>>', lambda e: "break")
         
-        # перехват вставки
         self.bind('<<Paste>>', self.handle_paste)
         self.bind('<Control-v>', self.handle_paste)
         
-        # отключаем мышь для копирования
-        self.bind('<Button-3>', lambda e: "break") 
+        self.bind('<Button-3>', lambda e: "break")
 
     def get_cursor_position(self):
         return self.index(tk.INSERT)
 
+    def _wipe_tail(self):
+        if self._data_len < self.MAX_LEN:
+            offset = self._data_len
+            length = self.MAX_LEN - self._data_len
+            # получаем указатель на начало хвоста
+            ptr = (ctypes.c_char * length).from_buffer(self._buffer, offset)
+            ctypes.memset(ptr, 0, length)
+
+    def _shift_buffer_right(self, byte_idx, shift_amount):
+        if self._data_len + shift_amount > self.MAX_LEN:
+            return False # переполнение
+        
+        count = self._data_len - byte_idx
+        if count > 0:
+            src_addr = (ctypes.c_char * count).from_buffer(self._buffer, byte_idx)
+            dst_addr = (ctypes.c_char * count).from_buffer(self._buffer, byte_idx + shift_amount)
+            ctypes.memmove(dst_addr, src_addr, count)
+            
+        return True
+
+    def _shift_buffer_left(self, byte_idx, shift_amount):
+        count = self._data_len - (byte_idx + shift_amount)
+        if count > 0:
+            src_addr = (ctypes.c_char * count).from_buffer(self._buffer, byte_idx + shift_amount)
+            dst_addr = (ctypes.c_char * count).from_buffer(self._buffer, byte_idx)
+            ctypes.memmove(dst_addr, src_addr, count)
+        
+        self._data_len -= shift_amount
+        self._wipe_tail()
+
+    def _get_byte_offset(self, char_index):
+        return sum(self._char_sizes[:char_index])
+
+
+    def _insert_text_at_cursor(self, text):
+        if not text: return
+        
+        total_new_bytes = sum(len(c.encode('utf-8')) for c in text)
+        if self._data_len + total_new_bytes > self.MAX_LEN:
+            return
+
+        char_pos = self.get_cursor_position()
+        
+        if self.selection_present():
+            self._delete_selection()
+            char_pos = self.get_cursor_position()
+
+        byte_pos = self._get_byte_offset(char_pos)
+
+        if not self._shift_buffer_right(byte_pos, total_new_bytes):
+            return
+
+        current_byte_pos = byte_pos
+        for char in text:
+            char_bytes = char.encode('utf-8')
+            b_len = len(char_bytes)
+            
+            for i, b in enumerate(char_bytes):
+                self._buffer[current_byte_pos + i] = b
+            
+            self._char_sizes.insert(char_pos, b_len)
+            char_pos += 1
+            current_byte_pos += b_len
+
+        self._data_len += total_new_bytes
+        
+        display_text = "*" * len(text) if self.mask_input else text
+        self.insert(tk.INSERT, display_text)
+        
+        del text
+        gc.collect()
+
+    def _delete_selection(self):
+        try:
+            start_char = self.index(tk.SEL_FIRST)
+            end_char = self.index(tk.SEL_LAST)
+            
+            start_byte = self._get_byte_offset(start_char)
+
+            bytes_to_del = sum(self._char_sizes[start_char:end_char])
+            
+            self._shift_buffer_left(start_byte, bytes_to_del)
+            
+            del self._char_sizes[start_char:end_char]
+            
+            self.delete(start_char, end_char)
+        except tk.TclError:
+            pass
+
+    def _backspace(self):
+        if self.selection_present():
+            self._delete_selection()
+            return
+            
+        pos = self.get_cursor_position()
+        if pos > 0:
+            # удаляем 1 символ слева от курсора
+            char_len = self._char_sizes[pos-1]
+            byte_start = self._get_byte_offset(pos-1)
+            
+            self._shift_buffer_left(byte_start, char_len)
+            del self._char_sizes[pos-1]
+            self.delete(pos-1)
+
+    def _delete_key(self):
+        if self.selection_present():
+            self._delete_selection()
+            return
+
+        pos = self.get_cursor_position()
+        if pos < len(self._char_sizes):
+            # удаляем 1 символ справа от курсора
+            char_len = self._char_sizes[pos]
+            byte_start = self._get_byte_offset(pos)
+            
+            self._shift_buffer_left(byte_start, char_len)
+            del self._char_sizes[pos]
+            self.delete(pos)
+
     def handle_paste(self, event):
         try:
             text = self.clipboard_get()
-            if not text:
-                return "break"
-            
-            self._insert_text_at_cursor(text)
+            if text:
+                self._insert_text_at_cursor(text)
         except tk.TclError:
             pass
         return "break"
 
-    def _insert_text_at_cursor(self, text):
-        pos = self.get_cursor_position()
-        
-        # обработка выделения текста
-        if self.selection_present():
-            self._delete_selection()
-            pos = self.get_cursor_position()
-
-        # вставляем данные в защищенный буфер
-        text_bytes = text.encode('utf-8')
-        self.pwd_buffer[pos:pos] = text_bytes
-        
-        # вставляем данные в GUI
-        display_text = "*" * len(text) if self.mask_input else text
-        self.insert(pos, display_text)
-
-    def _delete_selection(self):
-        try:
-            start = self.index(tk.SEL_FIRST)
-            end = self.index(tk.SEL_LAST)
-            del self.pwd_buffer[start:end]
-            self.delete(start, end)
-        except tk.TclError:
-            pass
-
     def on_key_press(self, event):
         key = event.keysym
         
-        # игнорируем нажатия
-        if key in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Alt_L', 'Alt_R', 'Caps_Lock', 'Num_Lock'):
-            return None
-
-        if key in ('Left', 'Right', 'Up', 'Down', 'Home', 'End'):
-            return None
+        if key in ('Left', 'Right', 'Up', 'Down', 'Home', 'End', 
+                   'Shift_L', 'Shift_R', 'Control_L', 'Control_R', 
+                   'Alt_L', 'Alt_R', 'Caps_Lock', 'Num_Lock', 
+                   'Return', 'Tab', 'Escape'):
+            return None 
 
         if key == 'BackSpace':
-            if self.selection_present():
-                self._delete_selection()
-            else:
-                pos = self.get_cursor_position()
-                if pos > 0:
-                    del self.pwd_buffer[pos-1]
-                    self.delete(pos-1)
+            self._backspace()
             return "break"
 
         if key == 'Delete':
-            if self.selection_present():
-                self._delete_selection()
-            else:
-                pos = self.get_cursor_position()
-                if pos < len(self.pwd_buffer):
-                    del self.pwd_buffer[pos]
-                    self.delete(pos)
+            self._delete_key()
             return "break"
 
-        if key in ('Return', 'Tab'):
-            return None
-
+        # ввод символов
         if len(event.char) > 0 and ord(event.char) >= 32:
             self._insert_text_at_cursor(event.char)
-            return "break" #
+            del event
+            gc.collect()
+            return "break"
 
-        return None
+        return "break" 
 
     def get_bytes(self):
-        return self.pwd_buffer
+        return self._buffer[:self._data_len]
 
     def clear(self):
-        if self.pwd_buffer:
-            # зануление данных
-            buf_len = len(self.pwd_buffer)
-            if buf_len > 0:
-                buffer = (ctypes.c_char * buf_len).from_buffer(self.pwd_buffer)
-                ctypes.memset(buffer, 0, buf_len)
-            del self.pwd_buffer
-            self.pwd_buffer = bytearray()
+        # жесткая очистка памяти
+        ptr = (ctypes.c_char * self.MAX_LEN).from_buffer(self._buffer)
+        ctypes.memset(ptr, 0, self.MAX_LEN)
+        
+        self._data_len = 0
+        self._char_sizes = []
         self.delete(0, tk.END)
 
     def set_text(self, text):
