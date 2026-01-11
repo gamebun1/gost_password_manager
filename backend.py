@@ -81,7 +81,7 @@ class gost_vault:
         else:
             data = init_data
         
-        hasher = gosthash.new('stribog256', data=data)
+        hasher = gosthash.new('streebog256', data=data)
         digest = hasher.digest()
         return digest[:self.kuzn_size]
 
@@ -138,7 +138,7 @@ class gost_vault:
                 return self._unpad(kuznechik.decrypt(enc_bytes)).decode("utf-8")
             else:
                 iv_d = self._generate_iv_simple(init_data=init_data)
-                
+
                 kuznechik = gostcipher.new('kuznechik', self.key_enc, gostcipher.MODE_CBC, iv=iv_d)
                 return self._unpad(kuznechik.decrypt(enc_bytes)).decode("utf-8")
         finally:
