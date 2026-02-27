@@ -160,17 +160,24 @@ class passwword_manager_app:
             
             enc_bytes = self.vault.encrypt_data(data)
 
-            #for site, creds in data.items():
-            #    data_clean(creds['password'])
-            #data.clear()
+            for site, creds in data.items():
+                data_clean(creds['password'])
+            data.clear()
 
             with open(DB_FILE, "wb") as f:
-                f.write(self.vault.salt + enc_bytes)
+                f.write(bytes(self.vault.salt))
+                f.write(bytes(enc_bytes))
 
-            data_clean(enc_bytes)
+            if isinstance(enc_bytes, bytearray):
+                data_clean(enc_bytes)
+
             return True
         except Exception as e:
-            ModernMessageBox("Ошибка", str(e), "error")
+
+            import traceback
+            traceback.print_exc()
+
+            ModernMessageBox("Ошибка", repr(e), "error")
             return False
 
     def generator(self):

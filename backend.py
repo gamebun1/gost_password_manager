@@ -77,7 +77,7 @@ class gost_vault:
         payload = bytearray()
         payload.extend(bytearray(iv))
         payload.extend(mac)
-        payload(enc_data)
+        payload.extend(enc_data)
         data_clean(iv)
         data_clean(mac)
         data_clean(enc_data)
