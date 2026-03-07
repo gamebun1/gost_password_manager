@@ -31,7 +31,7 @@ _lib.keyctl_revoke.argtypes = [key_serial_t]
 _lib.keyctl_revoke.restype = ctypes.c_long
 
 class KeyringManager:
-    @staticmethod
+    @staticmethod #Добавление ключей в keyring
     def add(description: str, payload: bytes, keyring=KEY_SPEC_SESSION_KEYRING) -> int:
         desc_b = description.encode('utf-8')
         if isinstance(payload, bytearray):
@@ -44,7 +44,7 @@ class KeyringManager:
             raise OSError(err, os.strerror(err))
         return key_id
 
-    @staticmethod
+    @staticmethod #Чтение ключей из keyring
     def read(key_id: int) -> bytearray:
         size = _lib.keyctl_read(key_id, None, 0)
         if size == -1:
@@ -59,6 +59,6 @@ class KeyringManager:
         finally:
             ctypes.memset(buffer, 0, size)
 
-    @staticmethod
+    @staticmethod #"забывание" ключей
     def revoke(key_id: int): 
         _lib.keyctl_revoke(key_id)

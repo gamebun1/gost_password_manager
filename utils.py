@@ -25,7 +25,7 @@ FIELD_SEP = bytearray(b'\x1F')
 #ram cleaner
 def data_clean(data):
     if isinstance(data, bytearray):
-        # (c_char * len) указать на bytearray
+        # (c_char * len) указатель на bytearray
         buffer = (ctypes.c_char * len(data)).from_buffer(data)
         # Зануляем буфер
         ctypes.memset(buffer, 0, len(data))
@@ -46,9 +46,9 @@ def lock_memory():
 
 #защищенный ввод секрета с помощью PinEntry
 def get_master_password(
-    title: str = "Secure Storage", 
-    desc: str = "Enter Master Password", 
-    prompt: str = "Password:"):
+    title: str = "Безопасное хранилище паролей", 
+    desc: str = "Введите мастер-пароль для доступа к хранилищу", 
+    prompt: str = "Пороли:"):
 
     try:
         process = subprocess.Popen(
@@ -95,7 +95,7 @@ def get_master_password(
 
     try:
         if not _wait_for_ok():
-            raise Exception("Pinentry init failed")
+            raise Exception("ошибка инициализации Pinentry")
 
         cmds = [
             f"SETTITLE {title}\n".encode(),
@@ -132,7 +132,7 @@ def get_master_password(
                         data_clean(password)
                         return bytearray()
                     else:
-                        raise Exception(f"Pinentry error: {line_buf}")
+                        raise Exception(f"ошика Pinentry: {line_buf}")
 
     finally:
         data_clean(line_buf)
@@ -148,7 +148,7 @@ def get_master_password(
         process.wait()
 
     return password
-
+    
 def serialize_db(data_dict): # site[1F]Email[1F]Password[1E]Site2[1F]Email2[1F]Password2[1E]...
     buffer = bytearray()
     

@@ -312,7 +312,7 @@ class passwword_manager_app:
         ModernMessageBox("Удалено", "База паролей успешно удалена.", "info")
 
     def setup_ui(self):
-        self.root.title("Менеджер паролей")
+        self.root.title("Менеджер пороли")
         self.root.geometry("600x380")
         self.root.resizable(False, False)
 
