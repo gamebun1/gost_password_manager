@@ -1,33 +1,28 @@
 # Описание
-Менеджер паролей на основе российских стандартов криптографии. В проекте задействован **"Кузнечик"**(ГОСТ 34.12-2015) в режиме CBC и **"Стрибог"**(ГОСТ 34.11-2012).
+Легковесный фреймворк для защиты конфиденциальных данных в оперативной памяти Python-приложений. Включает демонстрационное приложение (PoC) — локальный менеджер паролей с графическим интерфейсом.
+
+## Ключевые механизмы
+* **Изоляция ключей:** Делегирование ключей шифрования в ядро ОС (Linux Kernel Keyring).
+* **Защита от Swap-утечек:** Аппаратная блокировка выгрузки страниц памяти на диск (`mlockall`).
+* **Очистка памяти:** Принудительное затирание буферов нулями в обход Garbage Collector (`ctypes.memset`).
+* **Криптография РФ:** ГОСТ Р 34.12-2015 («Кузнечик») и ГОСТ Р 34.11-2012 («Стрибог») + контроль целостности HMAC.
+* **Защищенный ввод:** Прямой перехват мастер-пароля через системную утилиту `pinentry`.
 
 # Установка(Linux)
 ```bash
 git clone https://github.com/gamebun1/gost_password_manager
 cd gost_password_manager
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-Необходим установленный Tkinter, если его нет следуйте следующим инструкциям:
-
-Debian based
-```bash
-sudo apt update
-sudo apt install python3-tk
-```
-Fedora/Red Hat
-```bash
-sudo dnf install python3-tkinter
-```
-Arch Linux/Manjaro
-```bash
-sudo pacman -S tk
-```
-CentOS/RHEL
-```bash
-sudo yum install python3-tkinter
 ```
 
 # Запуск
+для запрета на выгрузку в Swap требуются права суперпользователя.
+```bash
+sudo .venv/bin/python3 main.py
+```
+без прав суперпользователя
 ```bash
 python3 main.py
 ```
